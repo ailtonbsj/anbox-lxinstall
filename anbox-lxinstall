@@ -1,0 +1,94 @@
+#!/bin/bash
+
+if [ "$1" != "" ]; then
+	mkdir /home/$USER/.anbox-lxlauncher/bin -p
+	mkdir /home/$USER/.anbox-lxlauncher/icons -p
+	mkdir /home/$USER/.local/share/applications/anbox -p
+
+	pkg=$(aapt dump badging $2 | grep 'package: name=' | \
+	awk '{split($0,a,"package: name='\''"); print a[2]}' | \
+	awk '{split($0,a,"'\''"); print a[1]}')
+
+	act=$(aapt dump badging $2 | grep 'launchable-activity: name=' | \
+	awk '{split($0,a,"launchable-activity: name='\''"); print a[2]}' | \
+	awk '{split($0,a,"'\''"); print a[1]}')
+
+	labelBr=$(aapt dump badging $2 | grep 'application-label-pt-BR:' | wc -l)
+	if [ "$labelBr" == "1" ]; then
+		label=$(aapt dump badging $2 | grep 'application-label-pt-BR:' | \
+		awk '{split($0,a,"'\''"); print a[2]}')
+	else
+		label=$(aapt dump badging $2 | grep 'application:' | \
+		awk '{split($0,a,"label='\''"); print a[2]}' | \
+		awk '{split($0,a,"'\''"); print a[1]}')
+	fi
+
+	labelASCII=$(echo $label | sed 's/[âêîôûãẽĩõũáéíóúāáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜĀÁǍÀĒÉĚÈĪÍǏÌŌÓǑÒŪÚǓÙǕǗǙǛ]//g')
+	labelPathed=$(echo $label | sed 's/ /_/g')
+
+	icon=$(aapt dump badging $2 | grep 'application:' | \
+	awk '{split($0,a,"icon='\''"); print a[2]}' | \
+	awk '{split($0,a,"'\''"); print a[1]}')
+	echo $icon
+
+	appFilename=$(basename -- "$2")
+	appFilename="${appFilename%.*}"
+	iconFilename=$(basename -- "$icon")
+	iconExtension="${iconFilename##*.}"
+	iconName="${iconFilename%.*}"
+fi
+
+if [ "$1" == "i" ]; then
+	
+	cp $2 /tmp/$appFilename.zip
+	unzip -oq /tmp/$appFilename.zip -d /tmp/$appFilename
+	if [ "$iconExtension" == "png" ]; then
+		cp /tmp/$appFilename/$icon \
+		/home/$USER/.anbox-lxlauncher/icons/$labelPathed.png
+	else
+		iconPath=$(find /tmp/$appFilename/ -iname "*$iconName*.png" | \
+		head -n1)
+		cp $iconPath /home/$USER/.anbox-lxlauncher/icons/$labelPathed.png
+	fi
+
+	mkdir /home/$USER/.local/share/applications/anbox
+	cat << EOF > /home/$USER/.local/share/applications/anbox/$labelPathed.desktop
+[Desktop Entry]
+Name=$label
+Comment=Android App running over anbox
+Exec=/home/$USER/.anbox-lxlauncher/bin/$labelPathed.sh
+Icon=/home/$USER/.anbox-lxlauncher/icons/$labelPathed.png
+Terminal=false
+Type=Application
+StartupNotify=true
+EOF
+
+	cat << EOF > /home/$USER/.anbox-lxlauncher/bin/$labelPathed.sh
+anbox launch --package=$pkg --component=$act
+sleep 3
+widApp=\$(wmctrl -l | grep "$labelASCII\$" | cut -d" " -f1)
+echo \$widApp
+wmctrl -i -r \$widApp -b toggle,maximized_vert
+wmctrl -i -r \$widApp -b toggle,maximized_horz
+EOF
+
+	sudo chmod +x /home/$USER/.anbox-lxlauncher/bin/$labelPathed.sh
+	adb install $2
+
+elif [ "$1" == "u" ]; then
+	rm -f "/home/$USER/.anbox-lxlauncher/icons/$labelPathed.png"
+	rm -f "/home/$USER/.local/share/applications/anbox/$labelPathed.desktop"
+	rm -f "/home/$USER/.anbox-lxlauncher/bin/$labelPathed.sh"
+	rm -f "/home/$USER/Desktop/anbox-$labelPathed.desktop"
+	adb uninstall $pkg
+else
+	cat << EOF
+Usage:
+   anbox-lxinstall [i | u] app.apk
+
+Options:
+   i             Install app on anbox and lxde
+   u             Uninstall app from lxde
+   app.apk       Name of Android App Package
+EOF
+fi
