@@ -40,6 +40,8 @@ fi
 
 if [ "$1" == "i" ]; then
 	
+	anbox.appmgr &
+
 	cp $2 /tmp/$appFilename.zip
 	unzip -oq /tmp/$appFilename.zip -d /tmp/$appFilename
 	if [ "$iconExtension" == "png" ]; then
@@ -70,6 +72,14 @@ widApp=\$(wmctrl -l | grep "$labelASCII\$" | cut -d" " -f1)
 echo \$widApp
 wmctrl -i -r \$widApp -b toggle,maximized_vert
 wmctrl -i -r \$widApp -b toggle,maximized_horz
+EOF
+
+	cat << EOF > /home/$USER/Desktop/anbox-$labelPathed.desktop
+[Desktop Entry]
+Type=Link
+Name=$label
+Icon=/home/$USER/.anbox-lxlauncher/icons/$labelPathed.png
+URL=/home/$USER/.local/share/applications/anbox/$labelPathed.desktop
 EOF
 
 	sudo chmod +x /home/$USER/.anbox-lxlauncher/bin/$labelPathed.sh
